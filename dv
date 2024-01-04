@@ -1,0 +1,304 @@
+# https://github.dev/diegovilar/libshell
+# a731c3c2d6601e1289e12ce4b426ab44 2023-11-08 10:13:48
+# shellcheck shell=bash
+# -----------------------------------------------------------------------------
+__LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
+
+if [[ -f "$__LIB_DIR/dv-colors" ]]; then
+  source "$__LIB_DIR/dv-colors"
+fi
+# -----------------------------------------------------------------------------
+
+export T_ANY=".*"
+export T_SOME="^[^\s]+"
+export T_INTEGER="^[0-9]+$"
+export T_BOOLEAN="^(true|false)$"
+export T_TRUTHY="^(1|true|TRUE|y|Y|yes|YES)$"
+export T_TRUE="$T_TRUTHY"
+export T_FALSY="^(0|false|FALSE|n|N|no|NO)$"
+export T_FALSE="$T_FALSY"
+
+function die() {
+  kill -HUP $$ >/dev/null 2>&1
+}
+export -f die
+
+function exitScript() {
+  exit 1
+}
+export -f exitScript
+
+function noop() {
+  :
+}
+export -f noop
+
+function out() {
+  echo -e "$*"
+}
+export -f out
+
+function log() {
+  local msg="$*"
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    msg="[$__FILENAME] $msg"
+  fi
+
+  echo -e "$msg"
+}
+export -f log
+
+function logInfo() {
+  local prefix="ℹ INFO:"
+  local msg="$*"
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    prefix="[$__FILENAME] $prefix"
+  fi
+
+  echo -e "$prefix $msg"
+}
+export -f logInfo
+
+function logDebug() {
+  if [[ "${DEBUG:-}" == "" ]]; then
+    return
+  fi
+
+  local prefix="🐛 DEBUG:"
+  local msg="$*"
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    prefix="[$__FILENAME] $prefix"
+  fi
+
+  echo -e "$prefix $msg"
+}
+export -f logDebug
+
+function logSuccess() {
+  local prefix="✅"
+  local msg
+
+  msg=$(trim "$*")
+  if [[ "${msg}" == "" ]]; then
+    msg="Done"
+  fi
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    prefix="[$__FILENAME] $prefix"
+  fi
+
+  echo -e "$prefix $msg"
+}
+export -f logSuccess
+
+function logError() {
+  local prefix="🛑 ERROR:"
+  local msg="$*"
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    prefix="[$__FILENAME] $prefix"
+  fi
+
+  echo -e "$prefix $msg" >&2
+}
+export -f logError
+
+function logWarn() {
+  local prefix="⚠️  WARN:"
+  local msg="$*"
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    prefix="[$__FILENAME] $prefix"
+  fi
+
+  echo -e "$prefix $msg" >&2
+}
+export -f logWarn
+
+function printHeader() {
+  local msg
+
+  msg=$(trim "$*")
+
+  echo -e "╒═══════════════════════════════════════════════════════════════════╕"
+  echo -e "│ $msg"
+  echo -e "╘═════════════════════════════════────────────−−−−−− −  ∙  ∙    ∙"
+}
+export -f printHeader
+
+function printFooter() {
+  local msg
+
+  msg=$(trim "$*")
+
+  echo -e "╒═══════════════════════════──────────−−−−− −  ∙   ∙"
+  echo -e "│ $msg"
+  echo -e "╘═══════════════════════════════════════════════════════════════════╛"
+}
+export -f printFooter
+
+function throw() {
+  logError "$@"
+  # exit 1
+  exitScript
+}
+export -f throw
+
+function throwEmptyOption() {
+  throw "A opção \"$1\" não pode ser vazia";
+}
+export -f throwEmptyOption
+
+function throwRequiredOption() {
+  throw "A opção \"$1\" é requerida";
+}
+export -f throwRequiredOption
+
+function throwEmptyParameter() {
+  throw "O parâmetro número $1 não pode ser vazio";
+}
+export -f throwEmptyParameter
+
+function throwRequiredParameter() {
+  throw "O parâmetro número $1 é requerido";
+}
+export -f throwRequiredParameter
+
+function throwRequiredEnv() {
+  throw "A variável de ambiente \"$1\" é requerida";
+}
+export -f throwRequiredEnv
+
+function pause() {
+  read -rs -p "Pressione [Enter] para continuar ou [Ctrl + C] para cancelar";
+  echo;
+}
+export -f pause
+
+function trim() {
+  echo -e "${@:-}" | sed -e 's/^[[:blank:]\n\r]\+//g' -e 's/[[:blank:]\n\r]\+$//g';
+}
+export -f trim
+
+# 1: Nome da variável de ambiente
+# 3: Opcional. Valor padrão caso a variável de ambiente não esteja definida ou esteja vazia. Padrão: vazio
+# 2: Opcional. RegEx para validar o valor da variável de ambiente. Padrão: T_ANY
+function getEnv() {
+  local varName;
+  local defaultValue;
+  local valuePattern;
+  local value;
+
+  varName=$(trim "${1:-}");
+  [[ "$varName" == "" ]] && throwRequiredParameter 1;
+
+  defaultValue=$(trim "${2:-}");
+
+  valuePattern=$(trim "${3:-}");
+  [[ "$valuePattern" == "" ]] && valuePattern=$T_ANY;
+
+  value=$(trim "${!varName:-}");
+  [[ "$value" == "" ]] && value=$defaultValue;
+
+  if [[ "$value" == "" ]]; then
+    return;
+  fi
+
+  if [[ ! "$value" =~ $valuePattern ]]; then
+    throw "O valor da variável de ambiente \"$varName\" - $value - não atende ao padrão esperado: $valuePattern";
+  fi
+
+  echo "$value";
+}
+export -f getEnv
+
+# 1: Nome da variável de ambiente
+# 2: Opcional. RegEx para validar o valor da variável de ambiente. Padrão: T_SOME
+function getRequiredEnv() {
+  local varName;
+  local valuePattern;
+  local value;
+
+  varName=$(trim "${1:-}");
+  [[ "$varName" == "" ]] && throwRequiredParameter 1;
+
+  valuePattern=$(trim "${2:-}");
+  [[ "$valuePattern" == "" ]] && valuePattern=$T_SOME;
+
+  value=$(trim "${!1:-}");
+
+  if [[ "$value" == "" ]]; then
+    throwRequiredEnv "$varName";
+  elif [[ ! "$value" =~ $valuePattern ]]; then
+    throw "O valor da variável de ambiente \"$varName\" - $value - não atende ao padrão esperado: $valuePattern";
+  fi
+
+  echo "$value";
+}
+export -f getRequiredEnv
+
+pathResolve() (
+  local arg=${1:-}
+
+  # TODO Lançar erro se nao informar parâmetro
+
+  # Se for um diretório, basta entrar nele e usar o pwd
+  if [ -d "$arg" ]; then
+    # shellcheck disable=SC2005
+    echo "$(cd "$arg" && pwd)"
+  # Se não for um diretorio mas exstir (arquivo, FIFO ...)
+  elif [ -e "$arg" ]; then
+    # shellcheck disable=SC2005
+    echo "$(cd "$(dirname "$arg")" >/dev/null 2>&1 && pwd)"
+  # Não encontrado
+  else
+    throw "\"$arg\" não existe"
+  fi
+)
+export -f pathResolve
+
+function startScript() {
+  local msg="${1:-}"
+  # TODO: Obrigar parâmetro
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    msg="[$__FILENAME] $msg"
+  fi
+
+  printf " \n"
+  printHeader "$msg"
+  printf " \n"
+}
+export -f startScript
+
+# shellcheck disable=SC2120
+function endScript() {
+  local code="${2:-0}"
+  local msg="${1:-}"
+  local symbol="${S_SUCCESS:-✔}"
+
+  if [[ "$code" -ne 0 ]]; then
+    symbol="${S_FAILURE:-✖}"
+  fi
+
+  if [[ "$msg" == "" ]]; then
+    msg="Done"
+    if [[ "$code" -ne 0 ]]; then
+      msg="Uh oh!"
+    fi
+  fi
+
+  if [[ "${__FILENAME:-}" != "" ]]; then
+    msg="[$__FILENAME] $msg"
+  fi
+
+  printf " \n"
+  printFooter "$symbol $msg"
+  printf " \n"
+
+  exit "$code"
+}
+export -f endScript
