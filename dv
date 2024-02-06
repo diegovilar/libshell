@@ -1,5 +1,5 @@
+# 13d59ee3149f2c19d052184e12789fa3 2024-02-06 09:47:53
 # https://github.dev/diegovilar/libshell
-# a731c3c2d6601e1289e12ce4b426ab44 2023-11-08 10:13:48
 # shellcheck shell=bash
 # -----------------------------------------------------------------------------
 __LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
@@ -10,9 +10,10 @@ fi
 # -----------------------------------------------------------------------------
 
 export T_ANY=".*"
-export T_SOME="^[^\s]+"
+export T_SOME="^\S+"
+export T_EMPTY="^\s*$"
 export T_INTEGER="^[0-9]+$"
-export T_BOOLEAN="^(true|false)$"
+export T_BOOLEAN="^(true|false|TRUE|FALSE)$"
 export T_TRUTHY="^(1|true|TRUE|y|Y|yes|YES)$"
 export T_TRUE="$T_TRUTHY"
 export T_FALSY="^(0|false|FALSE|n|N|no|NO)$"
@@ -143,6 +144,7 @@ export -f printFooter
 function throw() {
   logError "$@"
   # exit 1
+  # die
   exitScript
 }
 export -f throw
@@ -302,3 +304,32 @@ function endScript() {
   exit "$code"
 }
 export -f endScript
+
+function fixPermissions() {
+  local dir;
+  local user;
+  local group;
+  local dirPermissions;
+  local filePermissions;
+
+  dir=$(trim "${1:-}");
+  [[ "$dir" == "" ]] && throwRequiredParameter 1;
+
+  user=$(trim "${2:-}");
+  [[ "$user" == "" ]] && throwRequiredParameter 2;
+
+  group=$(trim "${3:-}");
+  [[ "$group" == "" ]] && throwRequiredParameter 3;
+
+  dirPermissions=$(trim "${4:-}");
+  [[ "$dirPermissions" == "" ]] && throwRequiredParameter 4;
+
+  filePermissions=$(trim "${5:-}");
+  [[ "$filePermissions" == "" ]] && throwRequiredParameter 5;
+
+  echo -e "Ajustando pemissões em \"$dir\" ..."
+  chown -R "$user":"$group" "$dir"
+  find "$dir" -type d -exec chmod "$dirPermissions" {} \;
+  find "$dir" -type f -exec chmod "$filePermissions" {} \;
+}
+export -f fixPermissions
