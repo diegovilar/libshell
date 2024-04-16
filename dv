@@ -1,5 +1,6 @@
-# 13d59ee3149f2c19d052184e12789fa3 2024-02-06 09:47:53
-# https://github.dev/diegovilar/libshell
+# 059360942b0473eda3f436eb3edafbc1
+# 2024-04-16 10:21:19
+# https://github.com/diegovilar/libshell
 # shellcheck shell=bash
 # -----------------------------------------------------------------------------
 __LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
